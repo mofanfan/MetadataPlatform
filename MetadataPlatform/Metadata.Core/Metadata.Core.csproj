@@ -8,8 +8,15 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Remove="MetaModels\Views\Aggt\AggtBlocks.cs" />
+    <Compile Remove="MetaModels\Views\Aggt\AggtBlocksCollection.cs" />
+    <Compile Remove="MetaModels\Views\Aggt\Block.cs" />
+    <Compile Remove="MetaModels\Views\ViewMeta\EntityViewMeta.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
     <Folder Include="MetaModels\Entities\" />
-    <Folder Include="MetaModels\Views\Aggt\" />
+    <Folder Include="MetaModels\Views\ViewMeta\" />
   </ItemGroup>
 
 </Project>
