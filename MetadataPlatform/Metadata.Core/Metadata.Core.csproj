@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>net6.0</TargetFramework>
@@ -8,6 +8,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Remove="MetaModels\Entities\Demo.cs" />
     <Compile Remove="MetaModels\Views\Aggt\AggtBlocks.cs" />
     <Compile Remove="MetaModels\Views\Aggt\AggtBlocksCollection.cs" />
     <Compile Remove="MetaModels\Views\Aggt\Block.cs" />
@@ -15,8 +16,11 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Folder Include="MetaModels\Entities\" />
     <Folder Include="MetaModels\Views\ViewMeta\" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="MetaModels\Entities\Demo.cs" />
   </ItemGroup>
 
 </Project>
