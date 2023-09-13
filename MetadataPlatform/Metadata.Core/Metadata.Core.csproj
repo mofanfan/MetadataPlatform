@@ -8,7 +8,6 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Compile Remove="MetaModels\Entities\Demo.cs" />
     <Compile Remove="MetaModels\Views\Aggt\AggtBlocks.cs" />
     <Compile Remove="MetaModels\Views\Aggt\AggtBlocksCollection.cs" />
     <Compile Remove="MetaModels\Views\Aggt\Block.cs" />
@@ -17,10 +16,6 @@
 
   <ItemGroup>
     <Folder Include="MetaModels\Views\ViewMeta\" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <None Include="MetaModels\Entities\Demo.cs" />
   </ItemGroup>
 
 </Project>
