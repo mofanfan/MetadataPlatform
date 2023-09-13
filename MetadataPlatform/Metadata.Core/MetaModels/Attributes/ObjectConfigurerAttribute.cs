@@ -7,3 +7,10 @@ public sealed class ObjectConfigurerAttribute : Attribute
     {
     }
 }
+
+public sealed class ObjectMetadata : Attribute
+{
+    public ObjectMetadata(Type declarationType)
+    {
+    }
+}

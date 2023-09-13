@@ -35,32 +35,41 @@ public class MaterialAssistMeasureUnit
 }
 
 [ObjectConfigurer(typeof(Material))]
-public partial class MaterialConfigurer
-    : ObjectConfigurer<Material>
+public class MaterialMetadataDeclaration
 {
-    public readonly PropertyMetadata Code =
+    public static readonly PropertyMetadata Code =
         P<Material>.Property(x => x.Code, x => {
             x.WithRequired(true);
         });
 
-    public readonly PropertyMetadata Name =
+    public static readonly PropertyMetadata Name =
         P<Material>.Property(x => x.Name);
 
-    public readonly PropertyMetadata G01 =
+    public static readonly PropertyMetadata G01 =
         P<Material>.Property(x => x.G01, x => {
             // 前台编辑
         });
 
-    public readonly PropertyMetadata MasterUnit =
+    public static readonly PropertyMetadata MasterUnit =
         P<Material>.Property(x => x.UnitId);
 
     public static readonly PropertyMetadata SlaveUnits =
         P<Material>.Property(x => x.MaterialAssistMeasureUnitItem);
+}
 
-    /// <summary>
-    /// 自定义项
-    /// </summary>
-    // public static readonly VariadicPropertyHolder CustomProperties;
 
-    // public static readonly Test<MaterialAssistMeasureUnitConfigurer> A;
+public partial class MaterialMetadataConfigurer
+    : ObjectMetadataConfigurer
+{
+    public PropertyMetadata Code => MaterialMetadataDeclaration.Code;
+    public PropertyMetadata Name => MaterialMetadataDeclaration.Name;
+    public PropertyMetadata G01 => MaterialMetadataDeclaration.G01;
+    public PropertyMetadata MasterUnit => MaterialMetadataDeclaration.MasterUnit;
+    public PropertyMetadata SlaveUnits => MaterialMetadataDeclaration.SlaveUnits;
+
+    public void Configure()
+    {
+        Configure(Code, builder => {
+        });
+    }
 }
