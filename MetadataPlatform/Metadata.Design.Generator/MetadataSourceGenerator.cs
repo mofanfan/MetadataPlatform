@@ -1,14 +1,17 @@
-﻿using Microsoft.CodeAnalysis;
+﻿using Metadata.Design.Generator;
+using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using System.Collections.Immutable;
 using System.Diagnostics;
+using System.Text;
 
 namespace Metadata.Design;
 
 [Generator]
 public class MetadataSourceGenerator : IIncrementalGenerator
 {
+    private const string ObjectConfigurerClassFullName = "MetaModels.Entities.ObjectConfigurer<>";
     private const string ObjectConfigurerAttributeFullName = "Metadata.Core.MetaModels.Attributes.ObjectConfigurerAttribute";
 
     public void Initialize(IncrementalGeneratorInitializationContext context)
@@ -36,12 +39,28 @@ public class MetadataSourceGenerator : IIncrementalGenerator
 
     private static bool IsSyntaxTargetForGeneration(SyntaxNode node)
     {
-        return node is ClassDeclarationSyntax m && m.AttributeLists.Count > 0;
+        return node is ClassDeclarationSyntax /* m && m.AttributeLists.Count > 0 */;
     }
 
     private static GenerateContext? GetSemanticTargetForGeneration(GeneratorSyntaxContext context)
     {
         var declarationSyntax = (ClassDeclarationSyntax)context.Node;
+
+        var classSymbol = context.SemanticModel.GetDeclaredSymbol(declarationSyntax);
+        if (classSymbol == null) {
+            return null;
+        }
+
+        var baseType = classSymbol.FindBaseType("MetaModels.Entities.ObjectConfigurer<>");
+        if (baseType == null) {
+            return null;
+        }
+
+        var members = classSymbol.GetMembers();
+
+        var entityTypeSymbol = baseType.TypeArguments.First();
+
+        return new GenerateContext(declarationSyntax, classSymbol, null, entityTypeSymbol);
 
         // loop through all the attributes on the method
         foreach (AttributeListSyntax attributeListSyntax in declarationSyntax.AttributeLists) {
@@ -58,7 +77,7 @@ public class MetadataSourceGenerator : IIncrementalGenerator
                 if (fullName == ObjectConfigurerAttributeFullName) {
                     var a = (attributeSyntax.ArgumentList!.Arguments[0].Expression as TypeOfExpressionSyntax).Type as IdentifierNameSyntax;
                     // return the enum
-                    return new GenerateContext(declarationSyntax, a);
+                    return new GenerateContext(declarationSyntax, classSymbol, a, entityTypeSymbol);
                 }
             }
         }
@@ -81,38 +100,8 @@ public class MetadataSourceGenerator : IIncrementalGenerator
         foreach (var generateContext in distinctClasses) {
             generateContext.WithCompilation(compilation);
 
-            var configurerClassIdentifier = generateContext.ClassDeclarationSyntax.Identifier;
-            var semanticModel = compilation.GetSemanticModel(generateContext.ClassDeclarationSyntax.SyntaxTree);
-            var entityTypeSymbol = semanticModel.GetSymbolInfo(generateContext.IdentifierName).Symbol;
-
-            generateContext.SemanticModel = semanticModel;
-
-            GeneratePartialConfigurer(generateContext, context);
+            // GeneratePartialConfigurer(generateContext, context);
             GeneratePartialBo(generateContext, context);
-
-            var b = entityTypeSymbol.GetType();
-            var entityFullName = entityTypeSymbol.ToString();
-            int pos = entityFullName.LastIndexOf('.');
-            string ns = string.Empty;
-            string entityName;
-
-            if (pos > 0) {
-                ns = entityFullName.Substring(0, pos);
-                entityName = entityFullName.Substring(pos + 1);
-            } else {
-                entityName = entityFullName;
-            }
-
-            string source = $@"public partial class {entityName}ObjectMeta2 {{
-}}";
-
-            if (!string.IsNullOrEmpty(ns)) {
-                source = $@"namespace {ns} {{
-{source}
-}}";
-            }
-
-            context.AddSource($"Metadata_{entityName}.g.cs", source);
 
             // foreach (var attributeListSyntax in declaration.AttributeLists) {
             //     foreach (var attributeSyntax in attributeListSyntax.Attributes) {
@@ -182,8 +171,68 @@ using {generateContext.FullNamespaceName};
 
     private static void GeneratePartialBo(GenerateContext generateContext, SourceProductionContext context)
     {
-        var boClassName = $"{generateContext.ClassName}Bo";
+        var members = generateContext.ConfigurerTypeSymbol.GetMembers();
 
-        var members = generateContext.ClassDeclarationSyntax.Members;
+        StringBuilder sourceBuilder = new();
+        var boClassName = $"{generateContext.Entity!.ClassName}Bo";
+
+        sourceBuilder.AppendLine($"namespace {generateContext.ConfigurerNamespace}");
+        sourceBuilder.AppendLine("{");
+        sourceBuilder.AppendLine($"    public class {boClassName}");
+        sourceBuilder.AppendLine("    {");
+
+        foreach (var member in members) {
+            if (member is not IFieldSymbol fieldSymbol) {
+                continue;
+            }
+
+            var syntaxReference = fieldSymbol.DeclaringSyntaxReferences.Single();
+            var variableDeclaratorSyntax = syntaxReference.GetSyntax() as VariableDeclaratorSyntax;
+
+            if (variableDeclaratorSyntax == null) {
+                continue;
+            }
+
+            if (variableDeclaratorSyntax.Initializer == null) {
+                context.ReportDiagnostic(
+                    Diagnostic.Create(
+                        new DiagnosticDescriptor("ME001", "title", "message", "category", DiagnosticSeverity.Error, true),
+                        variableDeclaratorSyntax.GetLocation()));
+                return;
+            }
+
+            if (variableDeclaratorSyntax.Initializer.Value is InvocationExpressionSyntax invocationExpressionSyntax) {
+                var methodSymbol = generateContext.SemanticModel.GetSymbolInfo(invocationExpressionSyntax).Symbol as IMethodSymbol;
+                if (methodSymbol == null) {
+                    throw new ArgumentNullException(nameof(methodSymbol));
+                }
+
+                if (methodSymbol.ReturnType is not INamedTypeSymbol returnType) {
+                    throw new Exception();
+                }
+
+                var baseTypeSymbol = returnType.FindBaseType("MetaModels.Entities.PropertyMetadata<>");
+                if (baseTypeSymbol == null) {
+                    continue;
+                }
+
+                var valueTypeSymbol = baseTypeSymbol.TypeArguments.First();
+                var valueTypeFullName = valueTypeSymbol.ToDisplayString();
+
+                sourceBuilder.AppendLine($"        public {valueTypeFullName} {fieldSymbol.Name} {{ get; set; }}");
+            }
+
+            var symbolInfo = generateContext.SemanticModel.GetSymbolInfo(variableDeclaratorSyntax.Initializer.Value);
+            var a = generateContext.SemanticModel.GetDeclaredSymbol(variableDeclaratorSyntax.Initializer.Value);
+            var b = generateContext.SemanticModel.GetTypeInfo(variableDeclaratorSyntax.Initializer.Value);
+        }
+
+        sourceBuilder.AppendLine("    }");
+        sourceBuilder.AppendLine("}");
+
+        var sourceText = sourceBuilder.ToString();
+        context.AddSource($"{boClassName}.g.cs", sourceText);
+
+        // var members = generateContext.ClassDeclarationSyntax.Members;
     }
 }

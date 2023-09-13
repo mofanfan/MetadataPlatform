@@ -1,5 +1,7 @@
 ﻿using Metadata.Core.MetaModels.Attributes;
 using MetaModels.Entities;
+using System;
+using System.Collections.Generic;
 
 namespace Metadata.Demo.Entities;
 
@@ -34,6 +36,7 @@ public class MaterialAssistMeasureUnit
 
 [ObjectConfigurer(typeof(Material))]
 public partial class MaterialConfigurer
+    : ObjectConfigurer<Material>
 {
     public readonly PropertyMetadata Code =
         P<Material>.Property(x => x.Code, x => {
@@ -57,7 +60,7 @@ public partial class MaterialConfigurer
     /// <summary>
     /// 自定义项
     /// </summary>
-    public static readonly VariadicPropertyHolder CustomProperties;
+    // public static readonly VariadicPropertyHolder CustomProperties;
 
     // public static readonly Test<MaterialAssistMeasureUnitConfigurer> A;
 }

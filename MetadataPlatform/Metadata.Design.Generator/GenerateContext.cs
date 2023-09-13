@@ -3,9 +3,26 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 
 namespace Metadata.Design;
 
+internal class EntityContext
+{
+    public string FullName { get; }
+    public string NamespaceName { get; }
+    public string ClassName { get; }
+
+    public EntityContext(string fullName, string namespaceName, string className)
+    {
+        FullName = fullName;
+        NamespaceName = namespaceName;
+        ClassName = className;
+    }
+}
+
 internal class GenerateContext
 {
     public ClassDeclarationSyntax ClassDeclarationSyntax { get; }
+    public INamedTypeSymbol ConfigurerTypeSymbol { get; }
+    public ITypeSymbol EntityTypeSymbol { get; }
+    public EntityContext? Entity { get; private set; }
     public IdentifierNameSyntax IdentifierName { get; }
     public SemanticModel SemanticModel { get; set; }
     public string FullNamespaceName { get; set; }
@@ -15,33 +32,40 @@ internal class GenerateContext
     public string ConfigurerNamespace { get; set; }
     public string ConfigurerClassName { get; private set; }
 
-    public GenerateContext(ClassDeclarationSyntax classDeclarationSyntax, IdentifierNameSyntax identifierNameSyntax)
+    public GenerateContext(
+        ClassDeclarationSyntax classDeclarationSyntax,
+        INamedTypeSymbol configurerTypeSymbol,
+        IdentifierNameSyntax identifierNameSyntax,
+        ITypeSymbol entityTypeSymbol)
     {
         ClassDeclarationSyntax = classDeclarationSyntax;
+        ConfigurerTypeSymbol = configurerTypeSymbol;
         IdentifierName = identifierNameSyntax;
+        EntityTypeSymbol = entityTypeSymbol;
     }
 
     public void WithCompilation(Compilation compilation)
     {
         SemanticModel = compilation.GetSemanticModel(ClassDeclarationSyntax.SyntaxTree);
 
-        ExtractIdentifiers();
+        InitializeEntityContext();
         ExtractConfigurerIdentifiers();
     }
 
-    private void ExtractIdentifiers()
+    private void InitializeEntityContext()
     {
-        var entityTypeSymbol = SemanticModel.GetSymbolInfo(IdentifierName).Symbol ?? throw new Exception("无法获取实体符号");
-
-        FullClassName = entityTypeSymbol.ToString();
-        int pos = FullClassName.LastIndexOf('.');
+        var fullName = EntityTypeSymbol.ToString();
+        string className, namespaceName = string.Empty;
+        int pos = fullName.LastIndexOf('.');
 
         if (pos > 0) {
-            FullNamespaceName = FullClassName.Substring(0, pos);
-            ClassName = FullClassName.Substring(pos + 1);
+            namespaceName = fullName.Substring(0, pos);
+            className = fullName.Substring(pos + 1);
         } else {
-            ClassName = FullClassName;
+            className = fullName;
         }
+
+        Entity = new EntityContext(fullName, namespaceName, className);
     }
 
     private void ExtractConfigurerIdentifiers()

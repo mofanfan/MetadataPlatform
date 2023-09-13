@@ -100,6 +100,8 @@ public class VariadicPropertyHolder
 
 public static class P<TEntity>
 {
+    /// 这里需要避免使用重载方法导致回返值不同，否则生成器无法识别
+
     public static PropertyMetadata<TValue, TEntity> Property<TValue>(
         Expression<Func<TEntity, TValue>> propertyExpr,
         Action<PropertyMetadata<TValue, TEntity>>? buildAction = null)
@@ -113,7 +115,7 @@ public static class P<TEntity>
         return p;
     }
 
-    public static PropertyMetadata<TValue, TEntity> Property<TValue>(
+    public static PropertyMetadata<TValue, TEntity> ArrayProperty<TValue>(
         Expression<Func<TEntity, IEnumerable<TValue>>> propertyExpr,
         Action<PropertyMetadata<TValue, TEntity>>? buildAction = null)
     {
@@ -125,9 +127,4 @@ public static class P<TEntity>
 
         return p;
     }
-}
-
-public class Test<T>
-{
-    public T Value { get; set; }
 }

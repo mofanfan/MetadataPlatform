@@ -29,6 +29,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Metadata.Core\Metadata.Core.csproj" />
+    <ProjectReference Include="..\Metadata.Demo\Metadata.Demo.csproj" />
     <ProjectReference Include="..\Metadata.Design.Generator\Metadata.Design.Generator.csproj" />
   </ItemGroup>
 </Project>

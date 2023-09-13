@@ -5,8 +5,9 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace Metadata.Demo.Entities.Metadata;
+namespace Metadata.Demo.Entities;
 
+#if false
 public class Material
 {
     public Type Type { get; } = typeof(Material);
@@ -39,3 +40,4 @@ public class NoneReasonProcutionTask
     public MaterialBo Material { get; set; }
 }
 
+#endif
