@@ -35,7 +35,7 @@ public class MaterialAssistMeasureUnit
 }
 
 [ObjectConfigurer(typeof(Material))]
-public class MaterialMetadataDeclaration
+public static class MaterialMetadataDeclaration
 {
     public static readonly PropertyMetadata Code =
         P<Material>.Property(x => x.Code, x => {
