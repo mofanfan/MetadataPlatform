@@ -4,20 +4,57 @@ public abstract class ObjectConfigurer<T>
 {
 }
 
-public abstract class ObjectMetadataConfigurer
+public interface IObjectMetadataConfigurer<T>
 {
-    protected void Configure<T>(T property, Action<IPropertyMetadataBuilder<T>> buildAction)
+    void Configure(IObjectMetadataProxy<T> metadata);
+}
+
+public interface IPropertyMetadataProxy<T>
+{
+    IPropertyMetadataProxy<T> WithLabel(string label);
+    IPropertyMetadataProxy<T> WithRequired(bool required = true);
+    IPropertyMetadataProxy<T> WithMaintenanceOwners(MaintenanceOwners owners);
+    IPropertyMetadataProxy<T> WithMaintenanceKind(MaintenanceKind kind);
+    IPropertyMetadataProxy<T> WithPartOfCoding(bool partOfCoding = true);
+}
+
+internal class PropertyMetadataProxy<T> : IPropertyMetadataProxy<T>
+    where T: PropertyMetadata
+{
+    private readonly T _property;
+
+    public PropertyMetadataProxy(T property)
     {
-        var builder = new PropertyMetadataBuilder<T>();
-        buildAction.Invoke(builder);
+        _property = property;
     }
-}
 
-public interface IPropertyMetadataBuilder<T>
-{
+    public IPropertyMetadataProxy<T> WithLabel(string label)
+    {
+        _property.Label = label;
+        return this;
+    }
 
-}
+    public IPropertyMetadataProxy<T> WithRequired(bool required)
+    {
+        _property.Required = required;
+        return this;
+    }
 
-internal class PropertyMetadataBuilder<T> : IPropertyMetadataBuilder<T>
-{
+    public IPropertyMetadataProxy<T> WithMaintenanceOwners(MaintenanceOwners owners)
+    {
+        _property.MaintenanceOwners = owners;
+        return this;
+    }
+
+    public IPropertyMetadataProxy<T> WithMaintenanceKind(MaintenanceKind kind)
+    {
+        _property.MaintenanceKind = kind;
+        return this;
+    }
+
+    public IPropertyMetadataProxy<T> WithPartOfCoding(bool partOfCoding)
+    {
+        _property.PartOfCoding = partOfCoding;
+        return this;
+    }
 }

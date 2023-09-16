@@ -7,6 +7,7 @@ public class MetadataSourceGeneratorTest
     public Task Test()
     {
         var source = @"using MetaModels.Entities;
+using Metadata.Core.MetaModels.Attributes;
 using System;
 
 namespace Test
@@ -21,17 +22,15 @@ namespace Test
     }
 
     public partial class MaterialConfigurer
-        : ObjectConfigurer<Material>
+        : ObjectMetadataRegister<Material>
     {
-        public readonly PropertyMetadata Code =
-            P<Material>.Property(x => x.Code, x => {
-                x.WithRequired(true);
-            });
+        public static readonly PropertyMetadata<string> Code =
+            P<Material>.Property(x => x.Code);
 
-        public readonly PropertyMetadata Name =
+        public static readonly PropertyMetadata<string> Name =
             P<Material>.Property(x => x.Name);
 
-        public readonly PropertyMetadata MasterUnit =
+        public static readonly PropertyMetadata<Guid> MasterUnit =
             P<Material>.Property(x => x.UnitId);
 
         // TODO: TEST public readonly PropertyMetadata Test;

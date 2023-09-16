@@ -1,21 +1,24 @@
 ﻿using MetaModels.Reflaction;
-using System.Diagnostics.Metrics;
 using System.Linq.Expressions;
 using System.Reflection;
 
 namespace MetaModels.Entities;
 
-public class PropertyMetadata
+public abstract class PropertyMetadata
 {
     public string Name { get; protected set; }
+    public string Label { get; internal set; }
     public Type Type { get; protected set; }
 
     /// <summary>
     /// 必填
     /// </summary>
-    public bool Required { get; protected set; }
+    public bool Required { get; internal set; }
 
     public IReadOnlyDictionary<string, object?> Annotations => _annotations;
+    public MaintenanceOwners MaintenanceOwners { get; internal set; }
+    public MaintenanceKind MaintenanceKind { get; internal set; }
+    public bool PartOfCoding { get; internal set; }
 
     /// <summary>
     /// 必填关联项
@@ -37,17 +40,17 @@ public class PropertyMetadata
         Type = type;
     }
 
-    public void SetAnnonation(string name, object? value)
+    internal void SetAnnonation(string name, object? value)
     {
         _annotations[name] = value;
     }
 
-    public void RemoveAnnonation(string name)
+    internal void RemoveAnnonation(string name)
     {
         _annotations.Remove(name);
     }
 
-    public void WithRequired(bool b)
+    internal void WithRequired(bool b)
     {
         Required = b;
     }
@@ -65,9 +68,9 @@ public class PropertyMetadata<TValue> : PropertyMetadata
     {
     }
 
-    public PropertyMetadata<TValue> CodingJoinable()
+    public PropertyMetadataRef<TValue> Ref()
     {
-        return this;
+        return null;
     }
 }
 
@@ -78,24 +81,6 @@ public class PropertyMetadata<TValue, TEntity> : PropertyMetadata<TValue>
         : base(propertyInfo)
     {
     }
-
-    internal PropertyMetadata(string name, Type type)
-        : base(name, type)
-    {
-    }
-
-    public PropertyMetadata<TResult, TEntity> JoinTable<TOuter, TKey, TResult>(
-        Expression<Func<TOuter, TKey>> outerKeySelector,
-        Expression<Func<TEntity, TKey>> innerKeySelector,
-        Expression<Func<TOuter, TResult>> resultSelector)
-    {
-        // return new PropertyMetadata<TResult, TEntity>();
-        return null;
-    }
-}
-
-public class VariadicPropertyHolder
-{
 }
 
 public static class P<TEntity>
@@ -113,6 +98,11 @@ public static class P<TEntity>
         buildAction?.Invoke(p);
 
         return p;
+    }
+
+    public static PropertyMetadata<TValue, TEntity> RegisterComputed<TValue>(Expression<Func<TEntity, TValue>> generateExpression)
+    {
+        return null;
     }
 
     public static PropertyMetadata<TValue, TEntity> ArrayProperty<TValue>(

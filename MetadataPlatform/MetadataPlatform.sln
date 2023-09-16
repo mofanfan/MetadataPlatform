@@ -11,7 +11,9 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Metadata.Design.Tests", "Me
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Metadata.Design.Generator", "Metadata.Design.Generator\Metadata.Design.Generator.csproj", "{C7C50E21-A9D4-4C92-A059-7FC0D6BA2ABE}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Metadata.Demo", "Metadata.Demo\Metadata.Demo.csproj", "{BDB80F6B-00B2-4646-8D30-E6D10CD17712}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Metadata.Demo", "Metadata.Demo\Metadata.Demo.csproj", "{BDB80F6B-00B2-4646-8D30-E6D10CD17712}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Metadata.Demo.Tests", "Metadata.Demo.Tests\Metadata.Demo.Tests.csproj", "{B0D50E4A-8465-48E1-A776-0CB234481FCB}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -39,6 +41,10 @@ Global
 		{BDB80F6B-00B2-4646-8D30-E6D10CD17712}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{BDB80F6B-00B2-4646-8D30-E6D10CD17712}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{BDB80F6B-00B2-4646-8D30-E6D10CD17712}.Release|Any CPU.Build.0 = Release|Any CPU
+		{B0D50E4A-8465-48E1-A776-0CB234481FCB}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{B0D50E4A-8465-48E1-A776-0CB234481FCB}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{B0D50E4A-8465-48E1-A776-0CB234481FCB}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{B0D50E4A-8465-48E1-A776-0CB234481FCB}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

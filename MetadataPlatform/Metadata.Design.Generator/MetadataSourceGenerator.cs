@@ -10,35 +10,34 @@ namespace Metadata.Design;
 [Generator]
 public class MetadataSourceGenerator : IIncrementalGenerator
 {
+    private const string ObjectMetadataRegisterClassFullName = "MetaModels.Entities.ObjectMetadataRegister<>";
     private const string ObjectConfigurerClassFullName = "MetaModels.Entities.ObjectConfigurer<>";
     private const string ObjectConfigurerAttributeFullName = "Metadata.Core.MetaModels.Attributes.ObjectConfigurerAttribute";
 
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
-        // Do a simple filter for enums
         IncrementalValuesProvider<GenerateContext> classDeclarations = context.SyntaxProvider
             .CreateSyntaxProvider(
                 predicate: static (s, _) => IsSyntaxTargetForGeneration(s),
                 transform: static (ctx, _) => GetSemanticTargetForGeneration(ctx))
             .Where(static m => m is not null)!;
 
-        IncrementalValueProvider<(Compilation, ImmutableArray<GenerateContext>)> compilationAndEnums
+        IncrementalValueProvider<(Compilation, ImmutableArray<GenerateContext>)> compilations
             = context.CompilationProvider.Combine(classDeclarations.Collect());
 
-        // context.RegisterPostInitializationOutput(x => {
-        //     x.AddSource(
-        //         "ObjectConfigurerAttribute.g.cs",
-        //         AssetManager.ReadFileAsString("ObjectConfigurerAttribute.cs"));
-        // });
-
-        // Generate the source using the compilation and enums
-        context.RegisterSourceOutput(compilationAndEnums,
+        context.RegisterSourceOutput(compilations,
             static (spc, source) => Execute(source.Item1, source.Item2, spc));
+
+        context.RegisterImplementationSourceOutput(
+            compilations,
+            static (spc, source) => ExecuteModuleInitializer(source.Item1, source.Item2, spc));
     }
 
     private static bool IsSyntaxTargetForGeneration(SyntaxNode node)
     {
-        return node is ClassDeclarationSyntax /* m && m.AttributeLists.Count > 0 */;
+        return node is ClassDeclarationSyntax m
+            && m.BaseList is not null
+            /*&& m.AttributeLists.Count > 0*/;
     }
 
     private static GenerateContext? GetSemanticTargetForGeneration(GeneratorSyntaxContext context)
@@ -50,7 +49,8 @@ public class MetadataSourceGenerator : IIncrementalGenerator
             return null;
         }
 
-        var baseType = classSymbol.FindBaseType("MetaModels.Entities.ObjectConfigurer<>");
+#if true
+        var baseType = classSymbol.FindBaseType(ObjectMetadataRegisterClassFullName);
         if (baseType == null) {
             return null;
         }
@@ -60,7 +60,7 @@ public class MetadataSourceGenerator : IIncrementalGenerator
         var entityTypeSymbol = baseType.TypeArguments.First();
 
         return new GenerateContext(declarationSyntax, classSymbol, null, entityTypeSymbol);
-
+#else
         // loop through all the attributes on the method
         foreach (AttributeListSyntax attributeListSyntax in declarationSyntax.AttributeLists) {
             foreach (AttributeSyntax attributeSyntax in attributeListSyntax.Attributes) {
@@ -72,14 +72,25 @@ public class MetadataSourceGenerator : IIncrementalGenerator
                 INamedTypeSymbol attributeContainingTypeSymbol = attributeSymbol.ContainingType;
                 string fullName = attributeContainingTypeSymbol.ToDisplayString();
 
-                // Is the attribute the [EnumExtensions] attribute?
                 if (fullName == ObjectConfigurerAttributeFullName) {
-                    var a = (attributeSyntax.ArgumentList!.Arguments[0].Expression as TypeOfExpressionSyntax).Type as IdentifierNameSyntax;
-                    // return the enum
-                    return new GenerateContext(declarationSyntax, classSymbol, a, entityTypeSymbol);
+                    var argument0 = attributeSyntax.ArgumentList!.Arguments[0];
+                    if (argument0.Expression is not TypeOfExpressionSyntax typeOfExpression) {
+                        // TODO: 分析器提示参数必需为typeof()表达式
+                        return null;
+                    }
+
+                    if (typeOfExpression.Type is not IdentifierNameSyntax entityIdentifierName) {
+                        var message = $"expression is not an identifier syntax, {typeOfExpression.Type.GetLocation()}";
+                        throw new ArgumentException(message);
+                    }
+
+                    var entityTypeSymbolInfo = context.SemanticModel.GetSymbolInfo(entityIdentifierName);
+                    var entitySymbol = entityTypeSymbolInfo.Symbol as ITypeSymbol;
+                    return new GenerateContext(declarationSyntax, classSymbol, null, entitySymbol!);
                 }
             }
         }
+#endif
 
         // we didn't find the attribute we were looking for
         return null;
@@ -97,38 +108,101 @@ public class MetadataSourceGenerator : IIncrementalGenerator
         IEnumerable<GenerateContext> distinctClasses = classes.Distinct();
 
         foreach (var generateContext in distinctClasses) {
+            if (context.CancellationToken.IsCancellationRequested) {
+                return;
+            }
+
             generateContext.WithCompilation(compilation);
 
-            // GeneratePartialConfigurer(generateContext, context);
-            GeneratePartialBo(generateContext, context);
-
-            // foreach (var attributeListSyntax in declaration.AttributeLists) {
-            //     foreach (var attributeSyntax in attributeListSyntax.Attributes) {
-            //         if (semanticModel.GetSymbolInfo(attributeSyntax).Symbol is not IMethodSymbol attributeSymbol) {
-            //             // weird, we couldn't get the symbol, ignore it
-            //             continue;
-            //         }
-            //     }
-            // }
+            GenerateMetadata(generateContext, context);
+            GeneratePartialMetadataRegister(generateContext, context);
+            // GeneratePartialBo(generateContext, context);
         }
-        // // Convert each EnumDeclarationSyntax to an EnumToGenerate
-        // List<EnumToGenerate> enumsToGenerate = GetTypesToGenerate(compilation, distinctClasses, context.CancellationToken);
-        // 
-        // // If there were errors in the EnumDeclarationSyntax, we won't create an
-        // // EnumToGenerate for it, so make sure we have something to generate
-        // if (enumsToGenerate.Count > 0) {
-        //     // generate the source code and add it to the output
-        //     string result = SourceGenerationHelper.GenerateExtensionClass(enumsToGenerate);
-        //     context.AddSource("EnumExtensions.g.cs", SourceText.From(result, Encoding.UTF8));
-        // }
     }
 
-    private static void GeneratePartialConfigurer(GenerateContext generateContext, SourceProductionContext context)
+    private static void GenerateMetadata(GenerateContext generateContext, SourceProductionContext context)
     {
+        var configurerInfo = generateContext.Configurer;
+        if (configurerInfo == null) {
+            throw new ArgumentNullException(nameof(configurerInfo));
+        }
+
+        var entityInfo = generateContext.Entity;
+        if (entityInfo == null) {
+            throw new ArgumentNullException(nameof(entityInfo));
+        }
+
+        var configurerName = configurerInfo.ClassName;
+        var metadataClassName = $"{entityInfo.ClassName}Metadata";
+        var metadataNamespace = configurerInfo.NamespaceName;
+        var namespaceIntent = string.IsNullOrEmpty(metadataNamespace) ? string.Empty : "    ";
+
+        var sourceBuilder = new StringBuilder();
+
+        SourceTextHelper.WriteAutoGeneratedHeader(sourceBuilder);
+
+        sourceBuilder.AppendLine("using MetaModels.Entities;");
+        sourceBuilder.AppendLine();
+
+        if (!string.IsNullOrEmpty(metadataNamespace)) {
+            sourceBuilder.AppendLine($"namespace {metadataNamespace}");
+            sourceBuilder.AppendLine("{");
+        }
+
+        sourceBuilder.AppendLine($"{namespaceIntent}public sealed class {metadataClassName}");
+        sourceBuilder.AppendLine($"{namespaceIntent}    : ObjectMetadata");
+        sourceBuilder.AppendLine($"{namespaceIntent}{{");
+
+        var configurerMembers = generateContext.ConfigurerTypeSymbol.GetMembers();
+
+        foreach (var member in configurerMembers) {
+            if (!member.IsStatic) {
+                continue;
+            }
+            if (member is not IFieldSymbol field) {
+                continue;
+            }
+            if (!field.IsReadOnly) {
+                continue;
+            }
+
+            var fieldType = field.Type as INamedTypeSymbol;
+            if (fieldType == null) {
+                throw new ArgumentNullException(nameof(fieldType));
+            }
+            if (!fieldType.IsGenericType) {
+                continue;
+            }
+
+            var fieldTypeName = fieldType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+            // TODO: public?
+            // TODO: based PropertyMetadata<> ?
+
+            sourceBuilder.AppendLine($"{namespaceIntent}    public {fieldTypeName} {field.Name} => {configurerName}.{field.Name};");
+        }
+
+        sourceBuilder.AppendLine($"{namespaceIntent}}}");
+
+        if (!string.IsNullOrEmpty(metadataNamespace)) {
+            sourceBuilder.AppendLine("}");
+        }
+
+        var sourceText = sourceBuilder.ToString();
+
+        context.AddSource($"{metadataClassName}.g.cs", sourceText);
+    }
+
+    private static void GeneratePartialMetadataRegister(GenerateContext generateContext, SourceProductionContext context)
+    {
+        var entityInfo = generateContext.Entity;
+        if (entityInfo == null) {
+            throw new ArgumentNullException(nameof(entityInfo));
+        }
+
+        var configurerInfo = generateContext.Configurer!;
         var modifiers = generateContext.ClassDeclarationSyntax.Modifiers;
 
         string accessModifier = string.Empty;
-        string staticModifier = string.Empty;
 
         foreach (var modifier in modifiers) {
             if (modifier.IsKind(SyntaxKind.PublicKeyword)) {
@@ -137,35 +211,41 @@ public class MetadataSourceGenerator : IIncrementalGenerator
                 accessModifier = "protected";
             } else if (modifier.IsKind(SyntaxKind.PrivateKeyword)) {
                 accessModifier = "private";
-            } else if (modifier.IsKind(SyntaxKind.StaticKeyword)) {
-                staticModifier = "static";
             }
         }
-        var declaredSymbol = generateContext.SemanticModel!.GetDeclaredSymbol(generateContext.ClassDeclarationSyntax) as ITypeSymbol;
 
-        string source = $@"{accessModifier} {staticModifier} partial class {generateContext.ConfigurerClassName}
-{{
-    public static PropertyMeta<TValue> Property<TValue>(Expression<Func<{generateContext.ClassName}, TValue>> propertyExpr)
-    {{
-        return new PropertyMeta<TValue>(""Name"");
-    }}
-}}";
+        var sourceBuilder = new StringBuilder();
+        var className = configurerInfo.ClassName;
+        var namespaceName = configurerInfo.NamespaceName;
+        var hasNamespaceIntent = string.IsNullOrEmpty(namespaceName) ? string.Empty : "    ";
 
-        if (declaredSymbol.ContainingNamespace is not null) {
-            source = $@"namespace {generateContext.ConfigurerNamespace}
-{{
-    {source}
-}}";
+        var location = generateContext.ClassDeclarationSyntax.GetLocation();
+        sourceBuilder.AppendLine($@"//------------------------------------------------------------------------------
+// <auto-generated>
+// File: {location.SourceTree?.FilePath}
+// {location.GetLineSpan().Span.Start}
+// </auto-generated>
+//----------------------");
+
+        sourceBuilder.AppendLine("using MetaModels.Entities;");
+        sourceBuilder.AppendLine($"using {entityInfo.NamespaceName};");
+        sourceBuilder.AppendLine();
+
+        if (!string.IsNullOrEmpty(namespaceName)) {
+            sourceBuilder.AppendLine($"namespace {namespaceName}");
+            sourceBuilder.AppendLine("{");
         }
 
-        source = $@"using Metadata.Core.MetaModels.Attributes;
-using System.Linq.Expressions;
-using MetaModels.Entities;
-using {generateContext.FullNamespaceName};
+        sourceBuilder.AppendLine($"{hasNamespaceIntent}{accessModifier} partial class {className}");
+        sourceBuilder.AppendLine($"{hasNamespaceIntent}    : IObjectMetadataConfigurer<{entityInfo.ClassName}Metadata>");
+        sourceBuilder.AppendLine($"{hasNamespaceIntent}{{");
+        sourceBuilder.AppendLine($"{hasNamespaceIntent}}}");
 
-{source}";
+        if (!string.IsNullOrEmpty(namespaceName)) {
+            sourceBuilder.AppendLine("}");
+        }
 
-        context.AddSource($"{generateContext.ConfigurerClassName}.g.cs", source);
+        context.AddSource($"{className}.g.cs", sourceBuilder.ToString());
     }
 
     private static void GeneratePartialBo(GenerateContext generateContext, SourceProductionContext context)
@@ -233,5 +313,33 @@ using {generateContext.FullNamespaceName};
         context.AddSource($"{boClassName}.g.cs", sourceText);
 
         // var members = generateContext.ClassDeclarationSyntax.Members;
+    }
+
+    private static void ExecuteModuleInitializer(Compilation compilation, ImmutableArray<GenerateContext> generateContexts, SourceProductionContext context)
+    {
+        var builder = new StringBuilder();
+
+        builder.AppendLine("using MetaModels.Options;");
+        builder.AppendLine();
+        builder.AppendLine("namespace Metadata.Core");
+        builder.AppendLine("{");
+        builder.AppendLine("    internal static class MetadataModule");
+        builder.AppendLine("    {");
+        builder.AppendLine("        public static void ConfigureOptions(ObjectMetadataOptions options)");
+        builder.AppendLine("        {");
+
+        foreach (var gc in generateContexts) {
+            var metadataNamespace = gc.Configurer!.NamespaceName;
+            var configurerClassFullName = gc.Configurer!.FullName;
+            var metadataClassName = $"{gc.Entity!.ClassName}Metadata";
+            var metadataClassFullName = string.IsNullOrEmpty(metadataClassName) ? metadataClassName : $"{metadataNamespace}.{metadataClassName}";
+            builder.AppendLine($"           options.RegisterIfNotContains<global::{configurerClassFullName}, global::{metadataClassFullName}>();");
+        }
+
+        builder.AppendLine("        }");
+        builder.AppendLine("    }");
+        builder.AppendLine("}");
+
+        context.AddSource("Metadata.Core.MetadataModule.g.cs", builder.ToString());
     }
 }
