@@ -5,6 +5,7 @@ public abstract class ObjectConfigurer<T>
 }
 
 public interface IObjectMetadataConfigurer<T>
+    where T : ObjectMetadata
 {
     void Configure(IObjectMetadataProxy<T> metadata);
 }

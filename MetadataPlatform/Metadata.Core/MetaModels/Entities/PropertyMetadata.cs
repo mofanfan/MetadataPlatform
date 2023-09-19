@@ -6,6 +6,7 @@ namespace MetaModels.Entities;
 
 public abstract class PropertyMetadata
 {
+    public ObjectMetadata DeclaringMetadata { get; private set; }
     public string Name { get; protected set; }
     public string Label { get; internal set; }
     public Type Type { get; protected set; }
@@ -32,12 +33,14 @@ public abstract class PropertyMetadata
     {
         Name = propertyInfo.Name;
         Type = propertyInfo.PropertyType;
+        Label = Name;
     }
 
     internal PropertyMetadata(string name, Type type)
     {
         Name = name;
         Type = type;
+        Label = Name;
     }
 
     internal void SetAnnonation(string name, object? value)
@@ -53,6 +56,11 @@ public abstract class PropertyMetadata
     internal void WithRequired(bool b)
     {
         Required = b;
+    }
+
+    internal void ConfigureInternal(ObjectMetadata declaringMetadata)
+    {
+        DeclaringMetadata = declaringMetadata;
     }
 }
 

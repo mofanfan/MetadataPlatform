@@ -9,7 +9,7 @@ using MetaModels.Entities;
 namespace Test
 {
     public sealed class MaterialMetadata
-        : ObjectMetadata
+        : ObjectMetadata<Test.Material>
     {
         public global::MetaModels.Entities.PropertyMetadata<string> Code => MaterialConfigurer.Code;
         public global::MetaModels.Entities.PropertyMetadata<string> Name => MaterialConfigurer.Name;

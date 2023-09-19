@@ -57,9 +57,9 @@ public partial class MaterialMetadataRegister
     public static readonly PropertyMetadata SlaveUnits =
         P<Material>.Property(x => x.MaterialAssistMeasureUnitItem);
 
-    public static readonly PropertyMetadata<UnitType> UnitType =
-        P<Material>.RegisterComputed(
-            x => x.MaterialAssistMeasureUnitItem.Count > 1 ? Entities.UnitType.Multiple : Entities.UnitType.Single);
+    // public static readonly PropertyMetadata<UnitType> UnitType =
+    //     P<Material>.RegisterComputed(
+    //         x => x.MaterialAssistMeasureUnitItem.Count > 1 ? Entities.UnitType.Multiple : Entities.UnitType.Single);
 
     public void Configure(IObjectMetadataProxy<MaterialMetadata> metadata)
     {

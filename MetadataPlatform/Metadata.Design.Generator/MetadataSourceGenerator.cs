@@ -134,6 +134,7 @@ public class MetadataSourceGenerator : IIncrementalGenerator
 
         var configurerName = configurerInfo.ClassName;
         var metadataClassName = $"{entityInfo.ClassName}Metadata";
+        var entityClassFullName = entityInfo.FullName;
         var metadataNamespace = configurerInfo.NamespaceName;
         var namespaceIntent = string.IsNullOrEmpty(metadataNamespace) ? string.Empty : "    ";
 
@@ -150,7 +151,7 @@ public class MetadataSourceGenerator : IIncrementalGenerator
         }
 
         sourceBuilder.AppendLine($"{namespaceIntent}public sealed class {metadataClassName}");
-        sourceBuilder.AppendLine($"{namespaceIntent}    : ObjectMetadata");
+        sourceBuilder.AppendLine($"{namespaceIntent}    : ObjectMetadata<{entityClassFullName}>");
         sourceBuilder.AppendLine($"{namespaceIntent}{{");
 
         var configurerMembers = generateContext.ConfigurerTypeSymbol.GetMembers();

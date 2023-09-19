@@ -4,7 +4,7 @@ namespace MetaModels.Entities;
 
 internal class ObjectMetadataProxy<T>
     : IObjectMetadataProxy<T>
-    where T : PropertyMetadata
+    where T : ObjectMetadata
 {
     private readonly T _target;
 

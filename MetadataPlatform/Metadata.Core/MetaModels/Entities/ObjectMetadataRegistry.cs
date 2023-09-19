@@ -1,6 +1,8 @@
 ﻿using MetaModels.Options;
 using Microsoft.Extensions.Options;
-using System.Linq;
+using System.Reflection;
+using System.Text;
+using System.Xml.Linq;
 
 namespace MetaModels.Entities;
 
@@ -24,46 +26,10 @@ internal class ObjectMetadataRegistry
         _options = options;
     }
 
-    public TConfigurer? FindMetadata<TConfigurer>()
-        where TConfigurer : class
-    {
-        return null;
-    }
-
-    public TConfigurer GetMetadata<TConfigurer>()
-        where TConfigurer : class
-    {
-        throw new NotImplementedException();
-    }
-
     public void Build()
     {
-        var buildGraph = new Dictionary<Type, BuildGraphNode>();
-
-        foreach (var item in _options.ObjectMetadataTypeMap) {
-            var registerType = item.Key;
-            var metadataType = item.Value;
-            if (!buildGraph.TryGetValue(metadataType, out BuildGraphNode? graphNode)) {
-                graphNode = new BuildGraphNode(registerType, metadataType);
-                buildGraph.Add(metadataType, graphNode);
-            }
-
-            if (graphNode.Completed) {
-                continue;
-            }
-
-            Build(graphNode);
-        }
-    }
-
-    private void Build(BuildGraphNode graphNode)
-    {
-        var metadata = Activator.CreateInstance(graphNode.MetadataType);
-        var register = Activator.CreateInstance(graphNode.RegisterType);
-        var metadataProxyType = typeof(ObjectMetadataProxy<>).MakeGenericType(graphNode.MetadataType);
-        var metadataProxy = Activator.CreateInstance(metadataProxyType, metadata);
-        var configureMethod = graphNode.RegisterType.GetMethod("Configure", new Type[] { metadataProxyType }) ?? throw new NotImplementedException();
-        configureMethod.Invoke(register, new object?[] { metadataProxy });
+        Resolver resolver = new(_options);
+        resolver.Resolve();
     }
 
     private class BuildGraphNode
@@ -80,36 +46,164 @@ internal class ObjectMetadataRegistry
         }
     }
 
-    private Type? FindGenericInterface(Type type, Type genericInterfaceType)
-    {
-        var interfaces = type.GetInterfaces();
-        return type.GetInterfaces()
-            .Where(x => x.IsGenericType && x == genericInterfaceType)
-            .SingleOrDefault();
-    }
-
     private class Resolver
     {
         private readonly ObjectMetadataOptions _options;
-        private readonly Stack<Type> _registerStack = new();
+        private readonly Stack<Type> _metadataStack = new();
+        private readonly List<ObjectMetadata> _objectMetadatas = new();
+        private readonly Dictionary<Type, ObjectMetadata> _metadataMap = new();
+        private readonly Dictionary<Type, MethodInfo> _objectMetadataByEntityType = new();
 
         public Resolver(ObjectMetadataOptions options)
         {
             _options = options;
+
+            var methods = typeof(Resolver).GetMethods(BindingFlags.Instance | BindingFlags.NonPublic);
+            foreach (var method in methods) {
+                if (method.Name != nameof(SetupObjectMetadataProperty)) {
+                    continue;
+                }
+                var parameters = method.GetParameters();
+                _objectMetadataByEntityType.Add(parameters[1].ParameterType, method);
+            }
         }
 
         public void Resolve()
         {
             foreach (var item in _options.ObjectMetadataTypeMap) {
-
+                Resolve(item.Key, item.Value);
             }
         }
 
-        private void Resolve(Type registerType, Type metadataType)
+        private ObjectMetadata Resolve(Type metadataType)
         {
-            if (_registerStack.Contains(registerType)) {
-                throw new Exception();
+            if (_metadataMap.TryGetValue(metadataType, out var metadata)) {
+                return metadata;
             }
+            if (_options.ObjectMetadataTypeMap2.TryGetValue(metadataType, out var registerType)) {
+                return Resolve(registerType, metadataType);
+            }
+
+            throw new NotImplementedException();
+        }
+
+        private ObjectMetadata Resolve(Type registerType, Type metadataType)
+        {
+            if (_metadataStack.Contains(metadataType)) {
+                var messageBuilder = new StringBuilder();
+
+                messageBuilder.AppendLine("元数据循环依赖：");
+
+                foreach (var name in _metadataStack.Select(x => x.FullName)) {
+                    messageBuilder.AppendLine($"    {name}");
+                }
+
+                messageBuilder.AppendLine($">>> {metadataType.FullName}");
+
+                throw new Exception(messageBuilder.ToString());
+            }
+
+            _metadataStack.Push(metadataType);
+
+            var metadata = Activator.CreateInstance(metadataType) as ObjectMetadata;
+            if (metadata == null) {
+                throw new ArgumentNullException(nameof(metadata));
+            }
+
+            var configurer = Activator.CreateInstance(registerType);
+            var configurerType = typeof(IObjectMetadataConfigurer<>).MakeGenericType(metadataType);
+
+            ConfigureObjectMetadataProperties(metadataType, metadata);
+            InvokeConfigurer(configurer, metadata);
+
+            if (!_metadataMap.TryAdd(metadataType, metadata)) {
+                // TODO:
+            }
+
+            return metadata;
+        }
+
+        private void ConfigureObjectMetadataProperties(
+            Type objectMetadataType,
+            ObjectMetadata objectMetadata)
+        {
+            var properties = objectMetadataType.GetProperties();
+
+            foreach (var property in properties) {
+                SetupObjectMetadataProperty(objectMetadata, property);
+            }
+        }
+
+        private void SetupObjectMetadataProperty(
+            ObjectMetadata objectMetadata,
+            PropertyInfo property)
+        {
+            var propertyValue = property.GetValue(objectMetadata);
+            if (propertyValue == null) {
+                throw new ArgumentNullException(nameof(propertyValue));
+            }
+
+            var setupAction = typeof(Resolver).GetMethod(
+                nameof(SetupObjectMetadataProperty),
+                BindingFlags.Instance | BindingFlags.NonPublic,
+                new Type[] {
+                    typeof(ObjectMetadata),
+                    property.PropertyType,
+                });
+
+            if (setupAction == null) {
+                var builder = new StringBuilder();
+                builder.AppendLine("没有合适的方法安装对象属性元数据。");
+                builder.AppendLine($"- ObjectMetadataType: {objectMetadata.GetType().FullName}");
+                builder.AppendLine($"- EntityType: {objectMetadata.GetEntityType().FullName}");
+                builder.AppendLine($"- Property: {property.Name} ({property.PropertyType})");
+
+                throw new ArgumentNullException(
+                    nameof(setupAction),
+                    builder.ToString());
+            }
+
+            setupAction.Invoke(this, new object[] { objectMetadata, propertyValue });
+        }
+
+        private void SetupObjectMetadataProperty(
+            ObjectMetadata objectMetadata,
+            PropertyMetadata propertyMetadata)
+        {
+            propertyMetadata.ConfigureInternal(objectMetadata);
+        }
+
+        private void SetupObjectMetadataProperty(
+            ObjectMetadata objectMetadata,
+            ObjectMetadataRef propertyMetadata)
+        {
+            var targetObjectMetadata = Resolve(propertyMetadata.TargetType);
+            var methodInfo = propertyMetadata.GetType().GetMethod(
+                nameof(ObjectMetadataRef<ObjectMetadata>.ConfigureInternal),
+                BindingFlags.Instance | BindingFlags.NonPublic,
+                new Type[] { propertyMetadata.TargetType, propertyMetadata.TargetType });
+            methodInfo.Invoke(propertyMetadata, new object[] { objectMetadata, targetObjectMetadata });
+        }
+
+        private void InvokeConfigurer(
+            object configurer,
+            ObjectMetadata objectMetadata)
+        {
+            var configurerType = typeof(IObjectMetadataConfigurer<>).MakeGenericType(objectMetadata.GetType());
+            if (!configurerType.IsInstanceOfType(configurer)) {
+                throw new ArgumentException("Configurer not implemented IObjectMetadataConfigurer<>");
+            }
+
+            var methodInfo = configurerType.GetMethod("Configure");
+            if (methodInfo == null) {
+                throw new ArgumentNullException();
+            }
+
+            var proxyType = typeof(ObjectMetadataProxy<>).MakeGenericType(objectMetadata.GetType());
+
+            var proxy = Activator.CreateInstance(proxyType, objectMetadata);
+
+            methodInfo.Invoke(configurer, new object[] { proxy });
         }
     }
 }
