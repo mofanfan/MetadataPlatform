@@ -2,7 +2,6 @@
 using Microsoft.Extensions.Options;
 using System.Reflection;
 using System.Text;
-using System.Xml.Linq;
 
 namespace MetaModels.Entities;
 
@@ -178,11 +177,7 @@ internal class ObjectMetadataRegistry
             ObjectMetadataRef propertyMetadata)
         {
             var targetObjectMetadata = Resolve(propertyMetadata.TargetType);
-            var methodInfo = propertyMetadata.GetType().GetMethod(
-                nameof(ObjectMetadataRef<ObjectMetadata>.ConfigureInternal),
-                BindingFlags.Instance | BindingFlags.NonPublic,
-                new Type[] { propertyMetadata.TargetType, propertyMetadata.TargetType });
-            methodInfo.Invoke(propertyMetadata, new object[] { objectMetadata, targetObjectMetadata });
+            propertyMetadata.ConfigureInternal(objectMetadata, targetObjectMetadata);
         }
 
         private void InvokeConfigurer(

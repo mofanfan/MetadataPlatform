@@ -13,6 +13,6 @@ public partial class SaleMaterialMetadataRegister
 
     public void Configure(IObjectMetadataProxy<SaleMaterialMetadata> metadata)
     {
-
+         
     }
 }
